@@ -10,7 +10,7 @@ module.exports = {
     development: {
       host: "192.168.1.113",
       port: 7545,
-      network_id: "*"
+      network_id: "5777"
     },
     local: {
       host: "localhost",
@@ -28,7 +28,8 @@ module.exports = {
       provider: new HDWalletProvider(mnemonic, "https://rinkeby.infura.io/QtnQ6cr8S78wSz3fdDz3"),
       //from: "0xb5ae340f37064B04613762DFF5D20831aB1C103B", // default address to use for any transaction Truffle makes during migrations
       network_id: 4,
-      gas: 4612388 // Gas limit used for deploys
+      gas: 4612388, // Gas limit used for deploys
+      gasPrice: 5000000000
     }
   },
 

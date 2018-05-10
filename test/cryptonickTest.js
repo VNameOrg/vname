@@ -11,7 +11,7 @@ contract('CryptoNick', function(accounts) {
         CryptoNick.deployed()
         .then(function(instance) {
             cryptoNick = instance;
-            return cryptoNick.getNextFreeID();
+            return cryptoNick.getNextFreeID(nick_Boop);
         })
         .then(function(response) { 
             //console.log(response);
@@ -66,13 +66,4 @@ contract('CryptoNick', function(accounts) {
             assert.equal(response, "true", "Response says nickname is not verified");
         });
     });
-
-    // it("should not allow verification if the nickname is already in use", function() {
-    //     var cryptoNick;
-    //     CryptoNick.deployed()
-    //     .then(function(instance) {
-    //         cryptoNick = instance;
-    //         return 
-    //     })
-    // })
 });

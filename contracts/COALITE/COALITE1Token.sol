@@ -1,7 +1,7 @@
 pragma solidity ^0.4.17;
 
 import '../Util/OwnerUtil.sol';
-import './COALITE1Receiver.sol';
+import './Interfaces/ICOALITE1Receiver.sol';
 
 /**
  * @dev Math operations with safety checks
@@ -113,7 +113,7 @@ contract COALITE1Token {
         balanceOf[_from] = balanceOf[_from].sub(_value);
         balanceOf[_to] = balanceOf[_to].add(_value);
         if (codeLength>0) {
-            COALITE1Receiver receiver = COALITE1Receiver(_to);
+            ICOALITE1Receiver receiver = ICOALITE1Receiver(_to);
             // Ensure that the Receiver accepts the provided token and amount
             require(receiver.tokenReceived(msg.sender, _value, _data));
         }

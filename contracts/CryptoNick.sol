@@ -8,6 +8,8 @@ contract CryptoNick is COALITE1Receiver {
 
     NickStorage nickStorage;
 
+    event AssignUser(address indexed user, bool result);
+
     function CryptoNick(address _store) public {
 
         nickStorage = NickStorage(_store);
@@ -30,12 +32,12 @@ contract CryptoNick is COALITE1Receiver {
      * @dev Get the NickName of the address and if it's verified
      * @param _user Address to be checked
      */
-    function getNickNameOf(address _user) public view returns (string, bool) {
-        var (, , byt, ver ) = nickStorage.getUser(_user);
+    function getNicknameOf(address _user) public view returns (string, bytes2, bool) {
+        var (, id, , byt, ver ) = nickStorage.getUser(_user);
         
         string memory str = bytes32ToString(byt);
         
-        return(str, ver);
+        return(str, id, ver);
     }
     
     function bytes32ToString(bytes32 x) pure internal returns (string) {
@@ -55,35 +57,125 @@ contract CryptoNick is COALITE1Receiver {
         return string(bytesStringTrimmed);
     }
 
+    function bytes32ArrayToString (bytes32[] data) pure internal returns (string) {
+        bytes memory bytesString = new bytes(data.length * 32);
+        uint urlLength;
+        for (uint i=0; i<data.length; i++) {
+            for (uint j=0; j<32; j++) {
+                byte char = byte(bytes32(uint(data[i]) * 2 ** (8 * j)));
+                if (char != 0) {
+                    bytesString[urlLength] = char;
+                    urlLength += 1;
+                }
+            }
+        }
+        bytes memory bytesStringTrimmed = new bytes(urlLength);
+        for (i=0; i<urlLength; i++) {
+            bytesStringTrimmed[i] = bytesString[i];
+        }
+        return string(bytesStringTrimmed);
+    }
+
+    /**
+     * @dev cheks that a given string as bytes32 is valid and returns true if so,
+     * the length of the string, and a parsed bytes32
+     * 
+     * @param str string to validate as bytes32
+     * 
+     * @return bool if the string is valid
+     * @return uint8 length of string
+     * @return bytes32 lower-cased version of str
+     */
+    function nickValidate(bytes32 str) public pure returns (bool, uint8, bytes32) {
+        
+        uint8 len = 0;
+
+        for (uint8 i = 0; i < 32; i++) {
+            
+            byte char = byte(str << 8 * i);
+            if (char != 0) {                                            //if char is not null
+                if (char >= 0x41 && char <= 0x5a) {                         //if char is an upper-case ASCII character
+                    bytes32 sum = bytes32(0x20) << 8 * (31 - i);
+                    assembly{ str := add(str, sum) }
+                } else {
+                    if (char >= 0x61 && char <= 0x7a) {                     //if char is a lower-case ASCII character
+                        
+                    } else {
+                        if (char >= 0x30 && char <= 0x39) {                 //if char is an ASCII number character
+                            
+                        } else {
+                            if (char == 0x20) {                             //if char is an ASCII space character
+                                if (i == 0) {
+                                    str = str << 8;
+                                } else {    
+                                    bytes32 other = str >> 8 * (32 - i);
+                                    other = other << 8 * (32 - i);
+                                    str = str << 8 * (1 + i);
+                                    str = str >> 8 * i;
+                                    assembly{ str := add(str, other) }
+                                }
+                                --i;
+                                --len;
+                            } else {                                        //if char is a symbol character
+                                return (false, len, 0x0);
+                            }
+                        }
+                    }
+                }
+                ++len;
+            } else {                                                       //if char is null
+                str = str >> 8 * (32 - len);
+                str = str << 8 * (32 - len);
+                return (true, len, str);
+            }
+        }
+        return (true, len, str);
+    }
+
     /**
      * @dev Assign a Nickname to your Address
      * @param _nick Nickname to be assigned
      */
     function assignUser(bytes32 _nick, bytes2 _id) public returns (bool) {
 
-        uint16 id = uint16(_id);
-        var (_idOld, , nickOld, ) = nickStorage.getUser(msg.sender);
-        uint16 idOld = uint16(_idOld);
-
+        var (_refOld, _idOld, , nickOld, _valid) = nickStorage.getUser(msg.sender);
+        
         //cant be the same nickname
         require(_nick != nickOld);
+
+        bool n_valid;
+        uint8 n_length;
+        bytes32 n_parsed;
+
+        (n_valid, n_length, n_parsed) = nickValidate(_nick);
+
+        require(n_length >= 5 && n_length <= 32);
+
+        if (uint16(_id) < nickStorage.getArrayLength(n_parsed)) {
+
+            var ( , hash, , ) = nickStorage.getNick(n_parsed, uint16(_id));
+        } else {
+            hash = 0;
+            _id = bytes2(nickStorage.getArrayLength(n_parsed));
+        }
 
         //user doesnt have nickname
         if (nickOld == 0) {
 
-            if (id >= nickStorage.getArrayLength(_nick)) {
+            if (uint16(_id) >= nickStorage.getArrayLength(n_parsed)) {
 
-                nickStorage.setUserAndPush(msg.sender, _id, _nick, false);
+                nickStorage.setUserAndPush(n_parsed, msg.sender, _id, _nick, false);
+                AssignUser(msg.sender, true);
                 return true;
             } else {
 
-                var ( , hash, , ) = nickStorage.getNick(_nick, id);
-
                 if (hash == 0 || keccak256(msg.sender) == hash) {
 
-                    nickStorage.setUserAndPush(msg.sender, _id, _nick, false);
+                    nickStorage.setUserAndPush(n_parsed, msg.sender, _id, _nick, false);
+                    AssignUser(msg.sender, true);
                     return true;
                 } else {
+                    AssignUser(msg.sender, false);
                     return false;
                 }
             }
@@ -91,36 +183,48 @@ contract CryptoNick is COALITE1Receiver {
         // has a different nickname
         } else {
 
-            if (id >= nickStorage.getArrayLength(_nick)) {
+            if (_refOld == n_parsed) {                  //if internal reference is the same
+                nickStorage.setUser(n_parsed, msg.sender, _idOld, _nick, _valid);
+                nickStorage.setNick(n_parsed, msg.sender, _idOld, _nick, _valid);
+            } else {                                    //if internal reference is different
+                if (uint16(_id) >= nickStorage.getArrayLength(_nick)) {
 
-                nickStorage.removeNick(nickOld, idOld);
-                nickStorage.setUserAndPush(msg.sender, _id, _nick, false);
-                return true;
-            } else {
-                
-                var ( , hash1, , ) = nickStorage.getNick(_nick, id);
-
-                if (hash1 == 0) {
-
-                    nickStorage.removeNick(nickOld, idOld);
-                    nickStorage.setUserAndPush(msg.sender, _id, _nick, false);
+                    nickStorage.removeNick(_refOld, uint16(_idOld));
+                    nickStorage.setUserAndPush(n_parsed, msg.sender, _id, _nick, false);
                     return true;
                 } else {
-                    return false;
-                }
+
+                    if (hash == 0) {
+
+                        nickStorage.removeNick(nickOld, uint16(_idOld));
+                        nickStorage.setUserAndPush(n_parsed, msg.sender, _id, _nick, false);
+                        AssignUser(msg.sender, true);
+                        return true;
+                    } else {
+                        AssignUser(msg.sender, false);
+                        return false;
+                    }
+                } 
             }
         }
+        AssignUser(msg.sender, false);
         return false;
     }
 
     function getNextFreeID(bytes32 _nick) public view returns (bytes2) {
 
-        uint len = nickStorage.getArrayLength(_nick);
+        bool n_valid;
+        uint8 n_length;
+        bytes32 n_parsed;
+
+        (n_valid, n_length, n_parsed) = nickValidate(_nick);
+
+        uint len = nickStorage.getArrayLength(n_parsed);
 
         uint16 i;
         for (i = 0; i < len; ++i) {
             
-            var ( , hash, , ) = nickStorage.getNick(_nick, i);
+            var ( , hash, , ) = nickStorage.getNick(n_parsed, i);
 
             if (hash == 0) {
 
@@ -128,13 +232,34 @@ contract CryptoNick is COALITE1Receiver {
             }
         }
 
-        return bytes2(i + 1);
+        return bytes2(i);
     }
 
     function nicknameIsVerified(bytes32 _nick) public view returns (bool) {
+
+        bool n_valid;
+        uint8 n_length;
+        bytes32 n_parsed;
+
+        (n_valid, n_length, n_parsed) = nickValidate(_nick);
         
-        var (found,) = nickStorage.findVerified(_nick);
+        var (found,) = nickStorage.findVerified(n_parsed);
         return found;
+    }
+
+    /**
+     * @dev Gets how many addresses are using that nickname
+     */
+    function nicknameCount(bytes32 _nick) public view returns (uint) {
+
+        bool n_valid;
+        uint8 n_length;
+        bytes32 n_parsed;
+
+        (n_valid, n_length, n_parsed) = nickValidate(_nick);
+
+        uint count = nickStorage.getArrayLength(n_parsed);
+        return count;
     }
 
     /**

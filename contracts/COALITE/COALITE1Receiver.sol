@@ -1,8 +1,8 @@
 pragma solidity ^0.4.17;
 
 import '../Util/OwnerUtil.sol';
-import './COALITEDataBase.sol';
-import './COALITE1Token.sol';
+import './Interfaces/ICOALITEDataBase.sol';
+import './Interfaces/ICOALITE1Token.sol';
 
 interface ERC20 { function transfer(address to, uint tokens) public returns (bool success); }
 
@@ -21,7 +21,7 @@ contract COALITE1Receiver is OwnerUtil {
 
     ReferenceMode mode;
     address TokenAddr;
-    COALITEDataBase DB;
+    ICOALITEDataBase DB;
 
     ///Called by a COALITE Token
     function tokenReceived(address _sender, uint _value, bytes _data) public returns (bool) {
@@ -92,7 +92,7 @@ contract COALITE1Receiver is OwnerUtil {
     function setDataBase(address _db) public onlyOwner {
 
         mode = ReferenceMode.DATABASE;
-        DB = COALITEDataBase(_db);
+        DB = ICOALITEDataBase(_db);
     }
 
     /**
@@ -113,7 +113,7 @@ contract COALITE1Receiver is OwnerUtil {
      */
     function transferTokenCOALITE(address _token, address _to, uint _amount) public onlyOwner {
 
-        COALITE1Token(_token).transfer(_to, _amount);
+        ICOALITE1Token(_token).transfer(_to, _amount);
     }
 
     /**
